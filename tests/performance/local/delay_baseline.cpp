@@ -16,7 +16,7 @@
 
 #include <boost/cstdint.hpp>
 #include <boost/format.hpp>
-#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/gregorian/parsers.hpp>
 #include <boost/program_options.hpp>
 
 char const* benchmark_name = "Delay Baseline";

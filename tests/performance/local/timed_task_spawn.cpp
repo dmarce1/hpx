@@ -21,6 +21,7 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/classification.hpp>
+#include <boost/date_time/gregorian/parsers.hpp>
 
 #include "worker_timed.hpp"
 

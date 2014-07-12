@@ -9,14 +9,14 @@
 #define HPX_THREAD_HELPERS_NOV_15_2008_0504PM
 
 #include <hpx/hpx_fwd.hpp>
-#include <hpx/util/move.hpp>
 #include <hpx/util/backtrace.hpp>
+#include <hpx/util/date_time_chrono.hpp>
+#include <hpx/util/move.hpp>
 #include <hpx/exception.hpp>
 #include <hpx/runtime/naming/address.hpp>
 #include <hpx/runtime/threads/thread_executor.hpp>
 
-#include <boost/date_time/posix_time/posix_time_duration.hpp>
-#include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/chrono.hpp>
 #include <boost/exception_ptr.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -63,34 +63,8 @@ namespace hpx { namespace threads
         thread_priority priority = thread_priority_normal,
         hpx::error_code& ec = throws);
 
-    ///////////////////////////////////////////////////////////////////////
-    /// \brief  Set the thread state of the \a thread referenced by the
-    ///         thread_id \a id.
-    ///
-    /// Set a timer to set the state of the given \a thread to the given
-    /// new value after it expired (at the given time)
-    ///
-    /// \param id         [in] The thread id of the thread the state should
-    ///                   be modified for.
-    /// \param at_time
-    /// \param state      [in] The new state to be set for the thread
-    ///                   referenced by the \a id parameter.
-    /// \param state_ex   [in] The new extended state to be set for the
-    ///                   thread referenced by the \a id parameter.
-    /// \param priority
-    /// \param ec         [in,out] this represents the error status on exit,
-    ///                   if this is pre-initialized to \a hpx#throws
-    ///                   the function will throw on error instead.
-    ///
-    /// \returns
-    ///
-    /// \note             As long as \a ec is not pre-initialized to
-    ///                   \a hpx#throws this function doesn't
-    ///                   throw but returns the result code using the
-    ///                   parameter \a ec. Otherwise it throws an instance
-    ///                   of hpx#exception.
     HPX_API_EXPORT thread_id_type set_thread_state(thread_id_type const& id,
-        boost::posix_time::ptime const& at_time,
+        boost::chrono::steady_clock::duration const& rel_time,
         thread_state_enum state = pending,
         thread_state_ex_enum stateex = wait_timeout,
         thread_priority priority = thread_priority_normal,
@@ -105,7 +79,7 @@ namespace hpx { namespace threads
     ///
     /// \param id         [in] The thread id of the thread the state should
     ///                   be modified for.
-    /// \param after_duration
+    /// \param rel_time
     /// \param state      [in] The new state to be set for the thread
     ///                   referenced by the \a id parameter.
     /// \param state_ex   [in] The new extended state to be set for the
@@ -122,12 +96,55 @@ namespace hpx { namespace threads
     ///                   throw but returns the result code using the
     ///                   parameter \a ec. Otherwise it throws an instance
     ///                   of hpx#exception.
-    HPX_API_EXPORT thread_id_type set_thread_state(thread_id_type const& id,
-        boost::posix_time::time_duration const& after_duration,
+    template <typename Rep, typename Period>
+    thread_id_type set_thread_state(thread_id_type const& id,
+        boost::chrono::duration<Rep, Period> const& rel_time,
         thread_state_enum state = pending,
         thread_state_ex_enum stateex = wait_timeout,
         thread_priority priority = thread_priority_normal,
-        error_code& ec = throws);
+        error_code& ec = throws)
+    {
+        return set_thread_state(id, util::to_steady_clock_duration(rel_time),
+            state, stateex, priority, ec);
+    }
+
+    ///////////////////////////////////////////////////////////////////////
+    /// \brief  Set the thread state of the \a thread referenced by the
+    ///         thread_id \a id.
+    ///
+    /// Set a timer to set the state of the given \a thread to the given
+    /// new value after it expired (at the given time)
+    ///
+    /// \param id         [in] The thread id of the thread the state should
+    ///                   be modified for.
+    /// \param abs_time
+    /// \param state      [in] The new state to be set for the thread
+    ///                   referenced by the \a id parameter.
+    /// \param state_ex   [in] The new extended state to be set for the
+    ///                   thread referenced by the \a id parameter.
+    /// \param priority
+    /// \param ec         [in,out] this represents the error status on exit,
+    ///                   if this is pre-initialized to \a hpx#throws
+    ///                   the function will throw on error instead.
+    ///
+    /// \returns
+    ///
+    /// \note             As long as \a ec is not pre-initialized to
+    ///                   \a hpx#throws this function doesn't
+    ///                   throw but returns the result code using the
+    ///                   parameter \a ec. Otherwise it throws an instance
+    ///                   of hpx#exception.
+    template <typename Clock, typename Duration>
+    thread_id_type set_thread_state(thread_id_type const& id,
+        boost::chrono::time_point<Clock, Duration> const& abs_time,
+        thread_state_enum state = pending,
+        thread_state_ex_enum stateex = wait_timeout,
+        thread_priority priority = thread_priority_normal,
+        error_code& ec = throws)
+    {
+        return set_thread_state(id, util::to_steady_clock_duration(abs_time),
+            state, stateex, priority, ec);
+    }
 
     ///////////////////////////////////////////////////////////////////////////
     /// The function get_thread_description is part of the thread related API
@@ -424,28 +441,6 @@ namespace hpx { namespace this_thread
 
     /// The function \a suspend will return control to the thread manager
     /// (suspends the current thread). It sets the new state of this thread
-    /// to \a suspended and schedules a wakeup for this threads at the given
-    /// time.
-    ///
-    /// \note Must be called from within a HPX-thread.
-    ///
-    /// \throws If <code>&ec != &throws</code>, never throws, but will set \a ec
-    ///         to an appropriate value when an error occurs. Otherwise, this
-    ///         function will throw an \a hpx#exception with an error code of
-    ///         \a hpx#yield_aborted if it is signaled with \a wait_aborted.
-    ///         If called outside of a HPX-thread, this function will throw
-    ///         an \a hpx#exception with an error code of \a hpx::null_thread_id.
-    ///         If this function is called while the thread-manager is not
-    ///         running, it will throw an \a hpx#exception with an error code of
-    ///         \a hpx#invalid_status.
-    ///
-    HPX_API_EXPORT threads::thread_state_ex_enum suspend(
-        boost::posix_time::ptime const&,
-        char const* description = "this_thread::suspend",
-        error_code& ec = throws);
-
-    /// The function \a suspend will return control to the thread manager
-    /// (suspends the current thread). It sets the new state of this thread
     /// to \a suspended and schedules a wakeup for this threads after the given
     /// duration.
     ///
@@ -462,14 +457,24 @@ namespace hpx { namespace this_thread
     ///         \a hpx#invalid_status.
     ///
     HPX_API_EXPORT threads::thread_state_ex_enum suspend(
-        boost::posix_time::time_duration const&,
+        boost::chrono::steady_clock::duration const& rel_time,
         char const* description = "this_thread::suspend",
         error_code& ec = throws);
 
+    template <typename Period, typename Rep>
+    threads::thread_state_ex_enum suspend(
+        boost::chrono::duration<Period, Rep> const& rel_time,
+        char const* description = "this_thread::suspend",
+        error_code& ec = throws)
+    {
+        return suspend(util::to_steady_clock_duration(rel_time),
+            description, ec);
+    }
+
     /// The function \a suspend will return control to the thread manager
     /// (suspends the current thread). It sets the new state of this thread
-    /// to \a suspended and schedules a wakeup for this threads after the given
-    /// time (specified in milliseconds).
+    /// to \a suspended and schedules a wakeup for this threads at the given
+    /// time.
     ///
     /// \note Must be called from within a HPX-thread.
     ///
@@ -483,11 +488,14 @@ namespace hpx { namespace this_thread
     ///         running, it will throw an \a hpx#exception with an error code of
     ///         \a hpx#invalid_status.
     ///
-    inline threads::thread_state_ex_enum suspend(
-        boost::uint64_t ms, char const* description = "this_thread::suspend",
+    template <typename Clock, typename Duration>
+    threads::thread_state_ex_enum suspend(
+        boost::chrono::time_point<Clock, Duration> const& abs_time,
+        char const* description = "this_thread::suspend",
         error_code& ec = throws)
     {
-        return suspend(boost::posix_time::milliseconds(ms), description, ec);
+        return suspend(util::to_steady_clock_duration(abs_time),
+            description, ec);
     }
 }}
 

@@ -186,45 +186,11 @@ namespace hpx { namespace threads { namespace executors { namespace detail
     }
 
     // Schedule given function for execution in this executor no sooner
-    // than time abs_time. This call never blocks, and may violate
-    // bounds on the executor's queue size.
-    template <typename Scheduler>
-    void thread_pool_executor<Scheduler>::add_at(
-        boost::posix_time::ptime const& abs_time,
-        closure_type && f, char const* desc,
-        threads::thread_stacksize stacksize, error_code& ec)
-    {
-        // create a new suspended thread
-        thread_init_data data(util::bind(
-            util::one_shot(&thread_pool_executor::thread_function_nullary),
-            this, std::move(f)), desc);
-        data.stacksize = threads::get_stack_size(stacksize);
-
-        thread_id_type id = threads::detail::create_thread( //-V601
-            &scheduler_, data, suspended, true, ec);
-        if (ec) return;
-        HPX_ASSERT(invalid_thread_id != id);    // would throw otherwise
-
-        // update statistics
-        ++tasks_scheduled_;
-
-        // now schedule new thread for execution
-        threads::detail::set_thread_state_timed(scheduler_, abs_time, id, ec);
-        if (ec) {
-            --tasks_scheduled_;
-            return;
-        }
-
-        if (&ec != &throws)
-            ec = make_success_code();
-    }
-
-    // Schedule given function for execution in this executor no sooner
     // than time rel_time from now. This call never blocks, and may
     // violate bounds on the executor's queue size.
     template <typename Scheduler>
-    void thread_pool_executor<Scheduler>::add_after(
-        boost::posix_time::time_duration const& rel_time,
+    void thread_pool_executor<Scheduler>::do_add_after(
+        boost::chrono::steady_clock::duration const& rel_time,
         closure_type && f, char const* desc,
         threads::thread_stacksize stacksize, error_code& ec)
     {

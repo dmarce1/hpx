@@ -22,31 +22,10 @@ namespace hpx { namespace threads { namespace executors { namespace detail
     }
 
     // Schedule given function for execution in this executor no sooner
-    // than time abs_time. This call never blocks, and may violate
-    // bounds on the executor's queue size.
-    void default_executor::add_at(
-        boost::posix_time::ptime const& abs_time,
-        closure_type && f, char const* description,
-        threads::thread_stacksize stacksize, error_code& ec)
-    {
-        // create new thread
-        thread_id_type id = register_thread_nullary(
-            std::move(f), description, suspended, false,
-            threads::thread_priority_normal, std::size_t(-1),
-            stacksize, ec);
-        if (ec) return;
-
-        HPX_ASSERT(invalid_thread_id != id);    // would throw otherwise
-
-        // now schedule new thread for execution
-        set_thread_state(id, abs_time);
-    }
-
-    // Schedule given function for execution in this executor no sooner
     // than time rel_time from now. This call never blocks, and may
     // violate bounds on the executor's queue size.
-    void default_executor::add_after(
-        boost::posix_time::time_duration const& rel_time,
+    void default_executor::do_add_after(
+        boost::chrono::steady_clock::duration const& rel_time,
         closure_type && f, char const* description,
         threads::thread_stacksize stacksize, error_code& ec)
     {

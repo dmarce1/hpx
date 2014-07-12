@@ -74,7 +74,7 @@ int hpx_main()
         // milliseconds, as specified. Additionally it will be queried during
         // application shutdown, as before.
 
-        hpx::this_thread::suspend(1000);   // wait for one second
+        hpx::this_thread::suspend(boost::chrono::seconds(1));   // wait for one second
     }
     return hpx::finalize();
 }

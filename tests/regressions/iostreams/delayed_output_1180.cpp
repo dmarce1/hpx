@@ -17,7 +17,7 @@ void print_stuff()
     char const* const s1 = "Adding workloads to queue ...\n";
     char const* const s2 = "\tAdding workload 10:10 ...\n";
 
-    hpx::this_thread::sleep_for(boost::posix_time::milliseconds(1000));
+    hpx::this_thread::sleep_for(boost::chrono::milliseconds(1000));
 
     hpx::consolestream << "Adding workloads to queue ..." << hpx::endl;
     expected += s1;
@@ -51,7 +51,7 @@ void print_stuff()
     expected += s2;
     HPX_TEST_EQ(expected, console_strm.str());
 
-    hpx::this_thread::sleep_for(boost::posix_time::milliseconds(1000));
+    hpx::this_thread::sleep_for(boost::chrono::milliseconds(1000));
 
     hpx::consolestream << "\tAdding workload " << 10 << ":" << 10 << " ..." << hpx::endl;
     expected += s2;

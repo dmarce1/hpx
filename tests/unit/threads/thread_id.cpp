@@ -19,7 +19,7 @@ using boost::program_options::options_description;
 void do_nothing(hpx::lcos::local::barrier& b1, hpx::lcos::local::barrier& b2)
 {
     b1.wait();
-    hpx::this_thread::suspend(100);     // wait for 100 ms
+    hpx::this_thread::suspend(boost::chrono::microseconds(100));     // wait for 100 ms
     b2.wait();
 }
 

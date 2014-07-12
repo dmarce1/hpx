@@ -21,7 +21,6 @@
 #include <hpx/runtime/actions/continuation.hpp>
 
 #include <boost/intrusive_ptr.hpp>
-#include <boost/date_time/posix_time/ptime.hpp>
 #include <boost/function_types/result_type.hpp>
 #include <boost/detail/iterator.hpp>
 #include <boost/static_assert.hpp>
@@ -661,7 +660,7 @@ namespace hpx { namespace lcos { namespace detail
         //     relative timeout (30.2.4) specified by rel_time has expired.
         // Throws: timeout-related exceptions (30.2.4).
         BOOST_SCOPED_ENUM(future_status)
-        wait_for(boost::posix_time::time_duration const& rel_time,
+        wait_for(boost::chrono::steady_clock::duration const& rel_time,
             error_code& ec = throws) const
         {
             if (!shared_state_)
@@ -673,12 +672,13 @@ namespace hpx { namespace lcos { namespace detail
             }
             return shared_state_->wait_for(rel_time, ec);
         }
+
         template <class Rep, class Period>
         BOOST_SCOPED_ENUM(future_status)
         wait_for(boost::chrono::duration<Rep, Period> const& rel_time,
             error_code& ec = throws) const
         {
-            return wait_for(util::to_time_duration(rel_time), ec);
+            return wait_for(util::to_steady_clock_duration(rel_time), ec);
         }
 
         // Effects: none if the shared state contains a deferred function
@@ -692,25 +692,12 @@ namespace hpx { namespace lcos { namespace detail
         //   - future_status::timeout if the function is returning because the
         //     absolute timeout (30.2.4) specified by abs_time has expired.
         // Throws: timeout-related exceptions (30.2.4).
-        BOOST_SCOPED_ENUM(future_status)
-        wait_until(boost::posix_time::ptime const& abs_time,
-            error_code& ec = throws) const
-        {
-            if (!shared_state_)
-            {
-                HPX_THROWS_IF(ec, no_state,
-                    "future_base<R>::wait_until",
-                    "this future has no valid shared state");
-                return future_status::uninitialized;
-            }
-            return shared_state_->wait_until(abs_time, ec);
-        }
         template <class Clock, class Duration>
         BOOST_SCOPED_ENUM(future_status)
         wait_until(boost::chrono::time_point<Clock, Duration> const& abs_time,
             error_code& ec = throws) const
         {
-            return wait_until(util::to_ptime(abs_time), ec);
+            return wait_for(util::to_steady_clock_duration(abs_time), ec);
         }
 
     protected:
@@ -1187,9 +1174,10 @@ namespace hpx { namespace lcos
 
     // extension: create a pre-initialized future object which gets ready at
     // a given point in time
-    template <typename Result>
+    template <typename Rep, typename Period, typename Result>
     future<typename util::detail::decay_unwrap<Result>::type>
-    make_ready_future_at(boost::posix_time::ptime const& at,
+    make_ready_future_after(
+        boost::chrono::duration<Rep, Period> const& rel_time,
         Result && init)
     {
         typedef typename util::detail::decay_unwrap<Result>::type result_type;
@@ -1197,21 +1185,13 @@ namespace hpx { namespace lcos
 
         using traits::future_access;
         return future_access<future<result_type> >::create(
-            new shared_state(at, std::forward<Result>(init)));
+            new shared_state(rel_time, std::forward<Result>(init)));
     }
 
     template <typename Clock, typename Duration, typename Result>
     future<typename util::detail::decay_unwrap<Result>::type>
-    make_ready_future_at(boost::chrono::time_point<Clock, Duration> const& at,
-        Result && init)
-    {
-        return make_ready_future_at(
-            util::to_ptime(at), std::forward<Result>(init));
-    }
-
-    template <typename Result>
-    future<typename util::detail::decay_unwrap<Result>::type>
-    make_ready_future_after(boost::posix_time::time_duration const& d,
+    make_ready_future_at(
+        boost::chrono::time_point<Clock, Duration> const& abs_time,
         Result && init)
     {
         typedef typename util::detail::decay_unwrap<Result>::type result_type;
@@ -1219,16 +1199,7 @@ namespace hpx { namespace lcos
 
         using traits::future_access;
         return future_access<future<result_type> >::create(
-            new shared_state(d, std::forward<Result>(init)));
-    }
-
-    template <typename Rep, typename Period, typename Result>
-    future<typename util::detail::decay_unwrap<Result>::type>
-    make_ready_future_after(boost::chrono::duration<Rep, Period> const& d,
-        Result && init)
-    {
-        return make_ready_future_at(
-            util::to_time_duration(d), std::forward<Result>(init));
+            new shared_state(abs_time, std::forward<Result>(init)));
     }
 
     // extension: create a pre-initialized future object
@@ -1245,38 +1216,26 @@ namespace hpx { namespace lcos
 
     // extension: create a pre-initialized future object which gets ready at
     // a given point in time
-    inline future<void> make_ready_future_at(
-        boost::posix_time::ptime const& at)
+    template <typename Rep, typename Period>
+    inline future<void> make_ready_future_after(
+        boost::chrono::duration<Rep, Period> const& rel_time)
     {
         typedef lcos::detail::timed_future_data<void> shared_state;
 
         using traits::future_access;
         return future_access<future<void> >::create(
-            new shared_state(at, util::unused));
+            new shared_state(rel_time, util::unused));
     }
 
     template <typename Clock, typename Duration>
     inline future<void> make_ready_future_at(
-        boost::chrono::time_point<Clock, Duration> const& at)
-    {
-        return make_ready_future_at(util::to_ptime(at));
-    }
-
-    inline future<void> make_ready_future_after(
-        boost::posix_time::time_duration const& d)
+        boost::chrono::time_point<Clock, Duration> const& abs_time)
     {
         typedef lcos::detail::timed_future_data<void> shared_state;
 
         using traits::future_access;
         return future_access<future<void> >::create(
-            new shared_state(d, util::unused));
-    }
-
-    template <typename Rep, typename Period>
-    inline future<void> make_ready_future_at(
-        boost::chrono::duration<Rep, Period> const& d)
-    {
-        return make_ready_future_after(util::to_time_duration(d));
+            new shared_state(abs_time, util::unused));
     }
 }}
 

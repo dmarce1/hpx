@@ -45,8 +45,8 @@ namespace hpx { namespace lcos { namespace local
             }
         }
     }
-
-    bool mutex::wait_for_single_object(::boost::system_time const& wait_until)
+    
+    bool mutex::wait_for_single_object()
     {
         // enqueue this thread
         mutex_type::scoped_lock l(mtx_);
@@ -65,9 +65,36 @@ namespace hpx { namespace lcos { namespace local
         {
             util::scoped_unlock<mutex_type::scoped_lock> ul(l);
 
-            // timeout at the given time, if appropriate
-            if (!wait_until.is_not_a_date_time())
-                threads::set_thread_state(threads::get_self_id(), wait_until);
+            // if this timed out, return true
+            statex = this_thread::suspend(threads::suspended,
+                description_);
+        }
+
+        return threads::wait_timeout == statex;
+    }
+
+    bool mutex::wait_for_single_object(
+        boost::chrono::steady_clock::duration const& wait_until)
+    {
+        // enqueue this thread
+        mutex_type::scoped_lock l(mtx_);
+        if (pending_events_) {
+            --pending_events_;
+            return false;
+        }
+
+        queue_entry e(threads::get_self_id());
+        queue_.push_back(e);
+
+        threads::thread_state_ex_enum statex;
+
+        reset_queue_entry r(e, queue_);
+
+        {
+            util::scoped_unlock<mutex_type::scoped_lock> ul(l);
+
+            // timeout at the given time
+            threads::set_thread_state(threads::get_self_id(), wait_until);
 
             // if this timed out, return true
             statex = this_thread::suspend(threads::suspended,
@@ -92,7 +119,8 @@ namespace hpx { namespace lcos { namespace local
         }
     }
 
-    bool mutex::timed_lock(::boost::system_time const& wait_until)
+    bool mutex::timed_lock(
+        boost::chrono::steady_clock::duration const& wait_for)
     {
         HPX_ITT_SYNC_PREPARE(this);
         if (try_lock_internal()) {
@@ -110,7 +138,7 @@ namespace hpx { namespace lcos { namespace local
             // wait for lock to get available
             bool lock_acquired = false;
             do {
-                if (wait_for_single_object(wait_until))
+                if (wait_for_single_object(wait_for))
                 {
                     // if this timed out, just return false
                     --active_count_;

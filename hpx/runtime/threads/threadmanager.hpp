@@ -12,8 +12,6 @@
 
 #include <boost/cstdint.hpp>
 #include <boost/exception_ptr.hpp>
-#include <boost/date_time/posix_time/ptime.hpp>
-#include <boost/date_time/posix_time/posix_time_config.hpp>
 
 #include <hpx/hpx_fwd.hpp>
 #include <hpx/state.hpp>
@@ -39,14 +37,6 @@ namespace hpx { namespace threads
     ///////////////////////////////////////////////////////////////////////////
     struct threadmanager_base : private boost::noncopyable
     {
-    protected:
-        // we use the boost::posix_time::ptime type for time representation
-        typedef boost::posix_time::ptime time_type;
-
-        // we use the boost::posix_time::time_duration type as the duration
-        // representation
-        typedef boost::posix_time::time_duration duration_type;
-
     public:
         virtual ~threadmanager_base() {}
 
@@ -150,7 +140,7 @@ namespace hpx { namespace threads
         ///
         /// \param id         [in] The thread id of the thread the state should
         ///                   be modified for.
-        /// \param at_time
+        /// \param rel_time
         /// \param state      [in] The new state to be set for the thread
         ///                   referenced by the \a id parameter.
         /// \param newstate_ex [in] The new extended state to be set for the
@@ -159,11 +149,24 @@ namespace hpx { namespace threads
         ///                   executed if the parameter \a newstate is pending.
         ///
         /// \returns
-        virtual thread_id_type set_state (time_type const& expire_at,
+        virtual thread_id_type set_state (
+            boost::chrono::steady_clock::duration const& rel_time,
             thread_id_type const& id, thread_state_enum newstate = pending,
             thread_state_ex_enum newstate_ex = wait_timeout,
             thread_priority priority = thread_priority_normal,
             error_code& ec = throws) = 0;
+
+        template <typename Rep, typename Period>
+        thread_id_type set_state (
+            boost::chrono::duration<Rep, Period> const& rel_time,
+            thread_id_type const& id, thread_state_enum newstate = pending,
+            thread_state_ex_enum newstate_ex = wait_timeout,
+            thread_priority priority = thread_priority_default,
+            error_code& ec = throws)
+        {
+            return set_state(util::to_steady_clock_duration(rel_time), id,
+                newstate, newstate_ex, priority, ec);
+        }
 
         /// \brief  Set the thread state of the \a thread referenced by the
         ///         thread_id \a id.
@@ -173,7 +176,7 @@ namespace hpx { namespace threads
         ///
         /// \param id         [in] The thread id of the thread the state should
         ///                   be modified for.
-        /// \param after_duration
+        /// \param abs_time
         /// \param state      [in] The new state to be set for the thread
         ///                   referenced by the \a id parameter.
         /// \param newstate_ex [in] The new extended state to be set for the
@@ -182,11 +185,17 @@ namespace hpx { namespace threads
         ///                   executed if the parameter \a newstate is pending.
         ///
         /// \returns
-        virtual thread_id_type set_state (duration_type const& expire_from_now,
+        template <typename Clock, typename Duration>
+        thread_id_type set_state (
+            boost::chrono::time_point<Clock, Duration> const& abs_time,
             thread_id_type const& id, thread_state_enum newstate = pending,
             thread_state_ex_enum newstate_ex = wait_timeout,
-            thread_priority priority = thread_priority_normal,
-            error_code& ec = throws) = 0;
+            thread_priority priority = thread_priority_default,
+            error_code& ec = throws)
+        {
+            return set_state(util::to_steady_clock_duration(abs_time), id,
+                newstate, newstate_ex, priority, ec);
+        }
 
         /// The get_description function is part of the thread related API and
         /// allows to query the description of one of the threads known to the

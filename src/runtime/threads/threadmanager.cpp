@@ -28,11 +28,10 @@
 #include <hpx/util/stringstream.hpp>
 #include <hpx/util/hardware/timestamp.hpp>
 
-#include <boost/make_shared.hpp>
 #include <boost/bind.hpp>
-#include <boost/asio/deadline_timer.hpp>
 #include <boost/cstdint.hpp>
 #include <boost/format.hpp>
+#include <boost/make_shared.hpp>
 
 #include <numeric>
 
@@ -554,26 +553,15 @@ namespace hpx { namespace threads
 
     ///////////////////////////////////////////////////////////////////////////
     /// Set a timer to set the state of the given \a thread to the given
-    /// new value after it expired (at the given time)
+    /// new value after it expired
     template <typename SchedulingPolicy, typename NotificationPolicy>
     thread_id_type threadmanager_impl<SchedulingPolicy, NotificationPolicy>::
-        set_state(time_type const& expire_at, thread_id_type const& id,
-            thread_state_enum newstate, thread_state_ex_enum newstate_ex,
-            thread_priority priority, error_code& ec)
+        set_state(boost::chrono::steady_clock::duration const& rel_time, 
+            thread_id_type const& id, thread_state_enum newstate, 
+            thread_state_ex_enum newstate_ex, thread_priority priority, 
+            error_code& ec)
     {
-        return detail::set_thread_state_timed(scheduler_, expire_at, id,
-            newstate, newstate_ex, priority, get_worker_thread_num(), ec);
-    }
-
-    /// Set a timer to set the state of the given \a thread to the given
-    /// new value after it expired (after the given duration)
-    template <typename SchedulingPolicy, typename NotificationPolicy>
-    thread_id_type threadmanager_impl<SchedulingPolicy, NotificationPolicy>::
-        set_state(duration_type const& from_now, thread_id_type const& id,
-            thread_state_enum newstate, thread_state_ex_enum newstate_ex,
-            thread_priority priority, error_code& ec)
-    {
-        return detail::set_thread_state_timed(scheduler_, from_now, id,
+        return detail::set_thread_state_timed(scheduler_, rel_time, id,
             newstate, newstate_ex, priority, get_worker_thread_num(), ec);
     }
 

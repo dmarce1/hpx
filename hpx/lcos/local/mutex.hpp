@@ -19,11 +19,10 @@
 #include <hpx/util/stringstream.hpp>
 
 #include <boost/atomic.hpp>
+#include <boost/chrono.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/intrusive/slist.hpp>
 #include <boost/thread/locks.hpp>
-#include <boost/thread/xtime.hpp>
-#include <boost/date_time/posix_time/ptime.hpp>
 #include <hpx/util/register_locks.hpp>
 
 // Disable warning C4275: non dll-interface class used as base for dll-interface
@@ -173,8 +172,9 @@ namespace hpx { namespace lcos { namespace local
             }
         }
 
+        bool wait_for_single_object();
         bool wait_for_single_object(
-            ::boost::system_time const& wait_until = ::boost::system_time());
+            boost::chrono::steady_clock::duration const& wait_for);
 
         void set_event();
 
@@ -251,7 +251,7 @@ namespace hpx { namespace lcos { namespace local
         ///         suspending. Throws \a hpx#yield_aborted if the mutex is
         ///         destroyed while suspended. Throws \a hpx#null_thread_id if
         ///         called outside of a HPX-thread.
-        bool timed_lock(::boost::system_time const& wait_until);
+        bool timed_lock(boost::chrono::steady_clock::duration const& wait_for);
 
         /// Attempts to acquire ownership of the \a mutex. Suspends the
         /// current HPX-thread until \a timeout if ownership cannot be obtained
@@ -263,15 +263,16 @@ namespace hpx { namespace lcos { namespace local
         ///         suspending. Throws \a hpx#yield_aborted if the mutex is
         ///         destroyed while suspended. Throws \a hpx#null_thread_id if
         ///         called outside of a HPX-thread.
-        template<typename Duration>
-        bool timed_lock(Duration const& timeout)
+        template <typename Period, typename Rep>
+        bool timed_lock(boost::chrono::duration<Period, Rep> const& rel_time)
         {
-            return timed_lock(boost::get_system_time()+timeout);
+            return timed_lock(util::to_steady_clock_duration(rel_time));
         }
 
-        bool timed_lock(boost::xtime const& timeout)
+        template <typename Clock, typename Duration>
+        bool timed_lock(boost::chrono::time_point<Clock, Duration> const& abs_time)
         {
-            return timed_lock(boost::posix_time::ptime(timeout));
+            return timed_lock(util::to_steady_clock_duration(abs_time));
         }
 
         /// Release ownership of the \a mutex.

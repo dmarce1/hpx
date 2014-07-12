@@ -11,6 +11,7 @@
 #include <hpx/config.hpp>
 
 #include <boost/atomic.hpp>
+#include <boost/chrono.hpp>
 #include <boost/ptr_container/ptr_vector.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
@@ -21,8 +22,9 @@
 #include <hpx/runtime/threads/thread_init_data.hpp>
 #include <hpx/runtime/threads/threadmanager.hpp>
 #include <hpx/performance_counters/counters.hpp>
-#include <hpx/util/io_service_pool.hpp>
 #include <hpx/util/block_profiler.hpp>
+#include <hpx/util/date_time_chrono.hpp>
+#include <hpx/util/io_service_pool.hpp>
 #include <hpx/util/spinlock.hpp>
 
 #include <hpx/config/warnings_prefix.hpp>
@@ -44,13 +46,6 @@ namespace hpx { namespace threads
         // we use a simple mutex to protect the data members of the
         // threadmanager for now
         typedef boost::mutex mutex_type;
-
-        // we use the boost::posix_time::ptime type for time representation
-        typedef typename threadmanager_base::time_type time_type;
-
-        // we use the boost::posix_time::time_duration type as the duration
-        // representation
-        typedef typename threadmanager_base::duration_type duration_type;
 
     public:
         typedef SchedulingPolicy scheduling_policy_type;
@@ -329,31 +324,6 @@ namespace hpx { namespace threads
         ///                 value will be ~0.
         thread_priority get_priority(thread_id_type const& id);
 
-        /// Set a timer to set the state of the given \a thread to the given
-        /// new value after it expired (at the given time)
-        /// \brief  Set the thread state of the \a thread referenced by the
-        ///         thread_id \a id.
-        ///
-        /// Set a timer to set the state of the given \a thread to the given
-        /// new value after it expired (at the given time)
-        ///
-        /// \param id         [in] The thread id of the thread the state should
-        ///                   be modified for.
-        /// \param at_time
-        /// \param state      [in] The new state to be set for the thread
-        ///                   referenced by the \a id parameter.
-        /// \param newstate_ex [in] The new extended state to be set for the
-        ///                   thread referenced by the \a id parameter.
-        /// \param priority   [in] The priority with which the thread will be
-        ///                   executed if the parameter \a new_state is pending.
-        ///
-        /// \returns
-        thread_id_type set_state (time_type const& expire_at,
-            thread_id_type const& id, thread_state_enum newstate = pending,
-            thread_state_ex_enum newstate_ex = wait_timeout,
-            thread_priority priority = thread_priority_default,
-            error_code& ec = throws);
-
         /// \brief  Set the thread state of the \a thread referenced by the
         ///         thread_id \a id.
         ///
@@ -362,7 +332,7 @@ namespace hpx { namespace threads
         ///
         /// \param id         [in] The thread id of the thread the state should
         ///                   be modified for.
-        /// \param after_duration
+        /// \param rel_time
         /// \param state      [in] The new state to be set for the thread
         ///                   referenced by the \a id parameter.
         /// \param newstate_ex [in] The new extended state to be set for the
@@ -371,7 +341,8 @@ namespace hpx { namespace threads
         ///                   executed if the parameter \a new_state is pending.
         ///
         /// \returns
-        thread_id_type set_state (duration_type const& expire_from_now,
+        thread_id_type set_state (
+            boost::chrono::steady_clock::duration const& rel_time,
             thread_id_type const& id, thread_state_enum newstate = pending,
             thread_state_ex_enum newstate_ex = wait_timeout,
             thread_priority priority = thread_priority_default,

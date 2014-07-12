@@ -12,6 +12,7 @@
 
 #include <vector>
 
+#include <boost/chrono.hpp>
 #include <boost/dynamic_bitset.hpp>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -60,7 +61,7 @@ namespace hpx { namespace lcos
             // suspend after one full loop over all values, 10ms should be fine
             // (default parameter)
             if (!suspended)
-                this_thread::suspend(boost::posix_time::milliseconds(suspend_for));
+                this_thread::suspend(boost::chrono::milliseconds(suspend_for));
         }
         return handled.count();
     }
@@ -105,7 +106,7 @@ namespace hpx { namespace lcos
             // suspend after one full loop over all values, 10ms should be fine
             // (default parameter)
             if (!suspended)
-                this_thread::suspend(boost::posix_time::milliseconds(suspend_for));
+                this_thread::suspend(boost::chrono::milliseconds(suspend_for));
         }
         return handled.count();
     }

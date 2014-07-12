@@ -12,11 +12,13 @@
 #include <hpx/runtime/threads/thread_helpers.hpp>
 #include <hpx/runtime/threads/detail/create_work.hpp>
 #include <hpx/runtime/threads/detail/create_thread.hpp>
-#include <hpx/util/logging.hpp>
+#include <hpx/util/date_time_chrono.hpp>
 #include <hpx/util/io_service_pool.hpp>
+#include <hpx/util/logging.hpp>
 #include <hpx/util/coroutine/coroutine.hpp>
 
-#include <boost/asio/deadline_timer.hpp>
+#include <boost/asio/basic_deadline_timer.hpp>
+#include <boost/chrono.hpp>
 
 namespace hpx { namespace threads { namespace detail
 {
@@ -223,8 +225,8 @@ namespace hpx { namespace threads { namespace detail
     ///////////////////////////////////////////////////////////////////////////
     template <typename SchedulingPolicy>
     thread_id_type set_thread_state_timed(SchedulingPolicy& scheduler,
-        boost::posix_time::ptime const& expire_at, thread_id_type const& thrd,
-        thread_state_enum newstate = pending,
+        boost::chrono::steady_clock::duration const& from_now,
+        thread_id_type const& thrd, thread_state_enum newstate = pending,
         thread_state_ex_enum newstate_ex = wait_timeout,
         thread_priority priority = thread_priority_normal,
         std::size_t thread_num = std::size_t(-1),
@@ -232,12 +234,8 @@ namespace hpx { namespace threads { namespace detail
 
     template <typename SchedulingPolicy>
     thread_id_type set_thread_state_timed(SchedulingPolicy& scheduler,
-        boost::posix_time::time_duration const& from_now, thread_id_type const& thrd,
-        thread_state_enum newstate = pending,
-        thread_state_ex_enum newstate_ex = wait_timeout,
-        thread_priority priority = thread_priority_normal,
-        std::size_t thread_num = std::size_t(-1),
-        error_code& ec = throws);
+        boost::chrono::steady_clock::duration const& from_now,
+        thread_id_type const& thrd, error_code& ec);
 
     ///////////////////////////////////////////////////////////////////////////
     /// This thread function is used by the at_timer thread below to trigger
@@ -278,9 +276,10 @@ namespace hpx { namespace threads { namespace detail
 
     /// This thread function initiates the required set_state action (on
     /// behalf of one of the threads#detail#set_thread_state functions).
-    template <typename SchedulingPolicy, typename TimeType>
+    template <typename SchedulingPolicy>
     thread_state_enum at_timer(SchedulingPolicy& scheduler,
-        TimeType const& expire, thread_id_type const& thrd, thread_state_enum newstate,
+        boost::chrono::steady_clock::duration const& expire,
+        thread_id_type const& thrd, thread_state_enum newstate,
         thread_state_ex_enum newstate_ex, thread_priority priority)
     {
         if (HPX_UNLIKELY(!thrd)) {
@@ -306,7 +305,12 @@ namespace hpx { namespace threads { namespace detail
         thread_id_type wake_id = create_thread(&scheduler, data, suspended);
 
         // create timer firing in correspondence with given time
-        boost::asio::deadline_timer t (
+        typedef boost::asio::basic_deadline_timer<
+            boost::chrono::steady_clock
+          , util::chrono_traits<boost::chrono::steady_clock>
+        > deadline_timer;
+
+        deadline_timer t (
             get_thread_pool("timer-pool")->get_io_service(), expire);
 
         // let the timer invoke the set_state on the new (suspended) thread
@@ -331,48 +335,13 @@ namespace hpx { namespace threads { namespace detail
     }
 
     /// Set a timer to set the state of the given \a thread to the given
-    /// new value after it expired (at the given time)
-    template <typename SchedulingPolicy>
-    thread_id_type set_thread_state_timed(SchedulingPolicy& scheduler,
-        boost::posix_time::ptime const& expire_at, thread_id_type const& thrd,
-        thread_state_enum newstate, thread_state_ex_enum newstate_ex,
-        thread_priority priority, std::size_t thread_num, error_code& ec)
-    {
-        if (HPX_UNLIKELY(!thrd)) {
-            HPX_THROWS_IF(ec, null_thread_id,
-                "threads::detail::set_thread_state",
-                "NULL thread id encountered");
-            return 0;
-        }
-
-        // this creates a new thread which creates the timer and handles the
-        // requested actions
-        typedef boost::posix_time::ptime time_type;
-        thread_init_data data(
-            boost::bind(&at_timer<SchedulingPolicy, time_type>,
-                boost::ref(scheduler), expire_at, thrd, newstate, newstate_ex,
-                priority),
-            "at_timer (expire at)", 0, priority, thread_num);
-
-        return create_thread(&scheduler, data, pending, true, ec); //-V601
-    }
-
-    template <typename SchedulingPolicy>
-    thread_id_type set_thread_state_timed(SchedulingPolicy& scheduler,
-        boost::posix_time::ptime const& expire_at, thread_id_type const& id,
-        error_code& ec)
-    {
-        return set_thread_state_timed(scheduler, expire_at, id, pending,
-            wait_timeout, thread_priority_normal, std::size_t(-1), ec);
-    }
-
-    /// Set a timer to set the state of the given \a thread to the given
     /// new value after it expired (after the given duration)
     template <typename SchedulingPolicy>
     thread_id_type set_thread_state_timed(SchedulingPolicy& scheduler,
-        boost::posix_time::time_duration const& from_now, thread_id_type const& thrd,
-        thread_state_enum newstate, thread_state_ex_enum newstate_ex,
-        thread_priority priority, std::size_t thread_num, error_code& ec)
+        boost::chrono::steady_clock::duration const& from_now,
+        thread_id_type const& thrd, thread_state_enum newstate,
+        thread_state_ex_enum newstate_ex, thread_priority priority,
+        std::size_t thread_num, error_code& ec)
     {
         if (HPX_UNLIKELY(!thrd)) {
             HPX_THROWS_IF(ec, null_thread_id,
@@ -381,22 +350,29 @@ namespace hpx { namespace threads { namespace detail
             return 0;
         }
 
+        if (from_now <= boost::chrono::seconds(0))
+        {
+            set_thread_state(thrd, newstate, newstate_ex, priority,
+                thread_num, ec);
+
+            return threads::invalid_thread_id;
+        }
+
         // this creates a new thread which creates the timer and handles the
         // requested actions
-        typedef boost::posix_time::time_duration time_type;
         thread_init_data data(
-            boost::bind(&at_timer<SchedulingPolicy, time_type>,
+            boost::bind(&at_timer<SchedulingPolicy>,
                 boost::ref(scheduler), from_now, thrd, newstate, newstate_ex,
                 priority),
-            "at_timer (from now)", 0, priority, thread_num);
+            "at_timer", 0, priority, thread_num);
 
         return create_thread(&scheduler, data, pending, true, ec); //-V601
     }
 
     template <typename SchedulingPolicy>
     thread_id_type set_thread_state_timed(SchedulingPolicy& scheduler,
-        boost::posix_time::time_duration const& from_now, thread_id_type const& thrd,
-        error_code& ec)
+        boost::chrono::steady_clock::duration const& from_now,
+        thread_id_type const& thrd, error_code& ec)
     {
         return set_thread_state_timed(scheduler, from_now, thrd, pending,
             wait_timeout, thread_priority_normal, std::size_t(-1), ec);

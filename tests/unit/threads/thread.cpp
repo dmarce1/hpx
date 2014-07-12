@@ -24,18 +24,18 @@ inline void set_description(char const* test_name)
 
 ///////////////////////////////////////////////////////////////////////////////
 inline int
-time_cmp(boost::posix_time::ptime const& xt1, boost::posix_time::ptime const& xt2)
+time_cmp(boost::chrono::steady_clock::time_point const& xt1, boost::chrono::steady_clock::time_point const& xt2)
 {
     if (xt1 == xt2)
         return 0;
     return xt1 > xt2 ? 1 : -1;
 }
 
-inline bool in_range(boost::posix_time::ptime const& xt, int secs = 1)
+inline bool in_range(boost::chrono::steady_clock::time_point const& xt, int secs = 1)
 {
-    boost::posix_time::ptime now =
-        boost::date_time::second_clock<boost::posix_time::ptime>::universal_time();
-    boost::posix_time::ptime mint(now + boost::posix_time::seconds(-secs));
+    boost::chrono::steady_clock::time_point now =
+        boost::chrono::steady_clock::now();
+    boost::chrono::steady_clock::time_point mint(now + boost::chrono::seconds(-secs));
     return time_cmp(xt, mint) >= 0 && time_cmp(xt, now) <= 0;
 }
 
@@ -75,9 +75,9 @@ void test_sleep()
 {
     set_description("test_sleep");
 
-    boost::posix_time::ptime now =
-        boost::date_time::second_clock<boost::posix_time::ptime>::universal_time();
-    hpx::this_thread::sleep_for(boost::posix_time::seconds(3));
+    boost::chrono::steady_clock::time_point now =
+        boost::chrono::steady_clock::now();
+    hpx::this_thread::sleep_for(boost::chrono::seconds(3));
 
     // Ensure it's in a range instead of checking actual equality due to time
     // lapse

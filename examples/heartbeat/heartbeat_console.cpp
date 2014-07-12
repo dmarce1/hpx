@@ -22,7 +22,7 @@ int hpx_main(boost::program_options::variables_map& vm)
     hpx::util::high_resolution_timer t;
     while (runfor <= 0 || t.elapsed() < runfor)
     {
-        hpx::this_thread::suspend(1000);
+        hpx::this_thread::suspend(boost::chrono::seconds(1));
         hpx::cout << "." << hpx::flush;
     }
 

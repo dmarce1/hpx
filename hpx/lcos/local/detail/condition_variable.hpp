@@ -10,10 +10,11 @@
 #include <hpx/config.hpp>
 #include <hpx/lcos/local/no_mutex.hpp>
 #include <hpx/util/assert_owns_lock.hpp>
+#include <hpx/util/date_time_chrono.hpp>
 #include <hpx/util/scoped_unlock.hpp>
 #include <hpx/runtime/threads/thread_helpers.hpp>
 
-#include <boost/date_time/posix_time/ptime.hpp>
+#include <boost/chrono.hpp>
 #include <boost/intrusive/slist.hpp>
 #include <boost/noncopyable.hpp>
 
@@ -223,7 +224,8 @@ namespace hpx { namespace lcos { namespace local { namespace detail
 
         template <typename Lock>
         threads::thread_state_ex_enum
-        wait_for(Lock& lock, boost::posix_time::time_duration const& rel_time,
+        wait_for(Lock& lock,
+            boost::chrono::steady_clock::duration const& rel_time,
             char const* description, error_code& ec = throws)
         {
             HPX_ASSERT_OWNS_LOCK(lock);
@@ -247,47 +249,43 @@ namespace hpx { namespace lcos { namespace local { namespace detail
             }
         }
 
-        template <typename Lock>
+        template <typename Lock, typename Period, typename Rep>
         threads::thread_state_ex_enum
-        wait_for(Lock& lock, boost::posix_time::time_duration const& rel_time,
+        wait_for(Lock& lock,
+            boost::chrono::duration<Period, Rep> const& rel_time,
+            char const* description, error_code& ec = throws)
+        {
+            return wait_for(lock, util::to_steady_clock_duration(rel_time),
+                description, ec);
+        }
+
+        template <typename Lock, typename Period, typename Rep>
+        threads::thread_state_ex_enum
+        wait_for(Lock& lock,
+            boost::chrono::duration<Period, Rep> const& rel_time,
             error_code& ec = throws)
         {
-            return wait_for(lock, rel_time,
+            return wait_for(lock, util::to_steady_clock_duration(rel_time),
                 "condition_variable::wait_for", ec);
         }
 
-        template <typename Lock>
+        template <typename Lock, typename Clock, typename Duration>
         threads::thread_state_ex_enum
-        wait_until(Lock& lock, boost::posix_time::ptime const& abs_time,
+        wait_until(Lock& lock,
+            boost::chrono::time_point<Clock, Duration> const& abs_time,
             char const* description, error_code& ec = throws)
         {
-            HPX_ASSERT_OWNS_LOCK(lock);
-
-            threads::thread_self* self = threads::get_self_ptr_checked(ec);
-            if (0 == self || ec) return threads::wait_unknown;
-
-            // enqueue the request and block this thread
-            queue_entry f(threads::get_self_id());
-            queue_.push_back(f);
-
-            reset_queue_entry r(f, queue_);
-            {
-                // yield this thread
-                util::scoped_unlock<Lock> unlock(lock);
-                threads::thread_state_ex_enum const reason =
-                    this_thread::suspend(abs_time, description, ec);
-                if (ec) return threads::wait_unknown;
-
-                return reason;
-            }
+            return wait_for(lock, util::to_steady_clock_duration(abs_time),
+                description, ec);
         }
 
-        template <typename Lock>
+        template <typename Lock, typename Clock, typename Duration>
         threads::thread_state_ex_enum
-        wait_until(Lock& lock, boost::posix_time::ptime const& abs_time,
+        wait_until(Lock& lock,
+            boost::chrono::time_point<Clock, Duration> const& abs_time,
             error_code& ec = throws)
         {
-            return wait_until(lock, abs_time,
+            return wait_for(lock, util::to_steady_clock_duration(abs_time),
                 "condition_variable::wait_until", ec);
         }
 

@@ -19,7 +19,7 @@
 #include <boost/cstdint.hpp>
 #include <boost/format.hpp>
 #include <boost/lockfree/stack.hpp>
-#include <boost/date_time/gregorian/gregorian.hpp>
+#include <boost/date_time/gregorian/parsers.hpp>
 #include <boost/program_options.hpp>
 
 #include <hpx/util/high_resolution_timer.hpp>

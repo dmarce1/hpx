@@ -91,7 +91,7 @@ int monitor(double runfor, std::string const& name, boost::uint64_t pause)
         }
 
         // Schedule a wakeup.
-        hpx::this_thread::suspend(pause);
+        hpx::this_thread::suspend(boost::chrono::milliseconds(pause));
     }
 
     return hpx::disconnect();
