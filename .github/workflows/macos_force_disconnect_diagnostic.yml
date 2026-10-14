@@ -1,0 +1,136 @@
+# Copyright (c) 2026 Dominic Marcello
+#
+# SPDX-License-Identifier: BSL-1.0
+# Distributed under the Boost Software License, Version 1.0. (See accompanying
+# file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
+# workflow_dispatch must be present on the fork's default branch before use.
+name: macOS force_disconnect diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Explicit source branch, tag, or full commit SHA to test'
+        required: true
+        type: string
+      repetitions:
+        description: 'Maximum test repetitions; stop on the first failure'
+        required: true
+        type: choice
+        default: '5'
+        options:
+        - '1'
+        - '5'
+        - '10'
+        - '20'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.repository == 'dmarce1/hpx'
+    runs-on: macos-latest
+    timeout-minutes: 90
+
+    steps:
+    - name: Validate source ref
+      shell: bash
+      env:
+        REQUESTED_REF: ${{ inputs.source_ref }}
+      run: |
+          if [[ -z "$REQUESTED_REF" ]]; then
+              printf 'An explicit source ref or SHA is required\n' >&2
+              exit 2
+          fi
+    - uses: actions/checkout@v7
+      with:
+        ref: ${{ inputs.source_ref }}
+        persist-credentials: false
+    - name: Record source revision
+      id: source
+      shell: bash
+      env:
+        REQUESTED_REF: ${{ inputs.source_ref }}
+        WORKFLOW_REF: ${{ github.workflow_ref }}
+      run: |
+          mkdir -p diagnostics
+          source_sha=$(git rev-parse HEAD)
+          printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
+          {
+              printf 'Requested source: %s\n' "$REQUESTED_REF"
+              printf 'Resolved source SHA: %s\n' "$source_sha"
+              printf 'Workflow ref: %s\n' "$WORKFLOW_REF"
+              git log -1 --format=fuller
+          } | tee diagnostics/source.txt
+          printf 'Tested source commit: `%s`\n' "$source_sha" \
+              >> "$GITHUB_STEP_SUMMARY"
+    - name: Install dependencies
+      shell: bash
+      run: |
+          brew install --overwrite python-tk && \
+          brew install --overwrite boost hwloc gperftools ninja && \
+          brew upgrade cmake
+    - name: Record toolchain
+      shell: bash
+      run: |
+          {
+              sw_vers
+              uname -a
+              clang++ --version
+              cmake --version
+              brew list --versions python-tk boost hwloc gperftools ninja cmake
+          } | tee diagnostics/toolchain.txt
+    - name: Configure as macOS Debug CI
+      shell: bash
+      run: |
+          cmake \
+              -H. \
+              -Bbuild \
+              -GNinja \
+              -DCMAKE_BUILD_TYPE=Debug \
+              -DHPX_WITH_FETCH_ASIO=ON \
+              -DHPX_WITH_ASIO_TAG=asio-1-34-2 \
+              -DHPX_WITH_EXAMPLES=ON \
+              -DHPX_WITH_TESTS=ON \
+              -DHPX_WITH_SUPERVISION=ON \
+              -DHPX_WITH_TESTS_MAX_THREADS_PER_LOCALITY=3 \
+              -DHPX_WITH_VERIFY_LOCKS=OFF \
+              -DHPX_WITH_VERIFY_LOCKS_BACKTRACE=OFF \
+              -DHPX_WITH_CHECK_MODULE_DEPENDENCIES=ON \
+              -DHPX_WITH_CONTRACTS_MODE=OBSERVE \
+              -DHPX_WITH_TESTS_COMMAND_LINE=--hpx:queuing=local-priority-fifo-double \
+              2>&1 | tee diagnostics/configure.log
+    - name: Build force_disconnect test and worker
+      shell: bash
+      run: |
+          cmake --build build \
+              --target force_disconnect_test force_disconnect_worker \
+              --parallel 2 2>&1 | tee diagnostics/build.log
+    - name: Run force_disconnect
+      shell: bash
+      env:
+        TEST_REPETITIONS: ${{ inputs.repetitions }}
+      run: |
+          case "$TEST_REPETITIONS" in
+              1|5|10|20) ;;
+              *) printf 'Invalid repetition count\n' >&2; exit 2 ;;
+          esac
+          ctest --test-dir build \
+              --tests-regex '^tests\.unit\.modules\.init_runtime\.force_disconnect$' \
+              --no-tests=error --output-on-failure --verbose --parallel 1 \
+              --timeout 180 --repeat "until-fail:$TEST_REPETITIONS" \
+              2>&1 | tee diagnostics/ctest.log
+    - name: Upload diagnostic logs
+      if: always()
+      uses: actions/upload-artifact@v7
+      with:
+        name: macos-force-disconnect-${{ github.run_id }}-${{ github.run_attempt }}
+        path: |
+          diagnostics/
+          build/CMakeCache.txt
+          build/CMakeFiles/CMakeConfigureLog.yaml
+          build/Testing/Temporary/
+        if-no-files-found: warn
+        retention-days: 14
