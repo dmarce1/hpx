@@ -88,6 +88,33 @@ void test_contains_async(ExPolicy&& policy, IteratorTag)
     HPX_TEST_EQ(result2.get(), false);
 }
 
+template <typename ExPolicy>
+void test_contains_async_chunks(ExPolicy policy)
+{
+    using std::size_t;
+
+    // Exercise independent chunk results on both sides of packed-word
+    // boundaries, with the matching element in every possible chunk.
+    std::vector<int> c(129, 2);
+    auto chunked_policy = policy.with(hpx::execution::static_chunk_size(1));
+    for (size_t i = 0; i != c.size(); ++i)
+    {
+        c[i] = 1;
+        hpx::future<bool> result =
+            hpx::ranges::contains(chunked_policy, c.begin(), c.end(), 1);
+        HPX_TEST_EQ(result.get(), true);
+        c[i] = 2;
+    }
+
+    hpx::future<bool> absent =
+        hpx::ranges::contains(chunked_policy, c.begin(), c.end(), 1);
+    HPX_TEST_EQ(absent.get(), false);
+
+    hpx::future<bool> empty =
+        hpx::ranges::contains(chunked_policy, c.begin(), c.begin(), 1);
+    HPX_TEST_EQ(empty.get(), false);
+}
+
 template <typename IteratorTag>
 void test_contains()
 {
@@ -108,6 +135,9 @@ void contains_test()
 {
     test_contains<std::random_access_iterator_tag>();
     test_contains<std::forward_iterator_tag>();
+
+    test_contains_async_chunks(hpx::execution::par(hpx::execution::task));
+    test_contains_async_chunks(hpx::execution::par_unseq(hpx::execution::task));
 }
 
 ///////////////////////////////////////////////////////////////////////////////
